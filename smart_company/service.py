@@ -2,11 +2,12 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import date,datetime
 from zoneinfo import ZoneInfo
 from .analysis import DEFAULT_SETTINGS, settings_checked, technical, fundamentals, multiples
+from .reports import Reports
 from .data import Provider, Store, SECTORS, default_dossier, now
 
 class Research:
     def __init__(self,store=None):
-        self.store=store or Store(); self.provider=Provider(self.store)
+        self.store=store or Store(); self.provider=Provider(self.store); self.reports=Reports(self.store)
     def settings(self): return settings_checked(self.store.read('settings',DEFAULT_SETTINGS))
     def company(self,ticker,refresh=False):
         catalog=self.provider.catalog()
@@ -28,6 +29,6 @@ class Research:
         if not warnings and fund['complete'] and tech['signal']==fund['signal']:
             verdict=tech['signal']
         explanation='Технический и фундаментальный сигналы согласованы.' if verdict!='wait' else 'Ждем: сигналы расходятся, нейтральны или недостаточно проверенных данных.'
-        snapshot=dict(company=company,dossier=dossier,sector=SECTORS[dossier.get('sector','other')],technical=tech,fundamental=fund,multiples=multiples(dossier),news=news,disclosure=disclosure,candles=candles['data'],sources={'catalog':catalog.get('fetched_at'),'candles':candles.get('fetched_at'),'moex':'https://iss.moex.com/iss/reference/'},settings=settings,generated_at=now(),verdict=verdict,explanation=explanation,warnings=warnings)
+        snapshot=dict(uploaded_reports=self.reports.records(ticker),company=company,dossier=dossier,sector=SECTORS[dossier.get('sector','other')],technical=tech,fundamental=fund,multiples=multiples(dossier),news=news,disclosure=disclosure,candles=candles['data'],sources={'catalog':catalog.get('fetched_at'),'candles':candles.get('fetched_at'),'moex':'https://iss.moex.com/iss/reference/'},settings=settings,generated_at=now(),verdict=verdict,explanation=explanation,warnings=warnings)
         self.store.write('snapshot-'+ticker,snapshot)
         return snapshot
