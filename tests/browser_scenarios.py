@@ -36,6 +36,7 @@ with TemporaryDirectory() as tmp:
         page.locator('[data-enabled="rsi"]').uncheck()
         page.screenshot(path=str(out/'indicators-desktop.png'),full_page=True)
         page.get_by_role('button',name='Сохранить для всех компаний').click()
+        expect(page.locator('#indicators-dialog')).not_to_be_visible()
         assert research.settings()['enabled']['rsi'] is False
 
         page.locator('#search').fill('sber');page.locator('#search').press('Enter')
@@ -45,6 +46,7 @@ with TemporaryDirectory() as tmp:
         page.get_by_role('button',name='Настройки анализа').click()
         page.locator('[name="threshold"]').fill('85')
         page.get_by_role('button',name='Сохранить и пересчитать').click()
+        expect(page.locator('#settings-dialog')).not_to_be_visible()
         page.locator('#refresh-card').wait_for()
         assert research.settings()['threshold']==85
         page.get_by_role('button',name='Досье и отчеты',exact=True).click()
@@ -52,6 +54,7 @@ with TemporaryDirectory() as tmp:
         assert page.locator('.report-editor').count()==1
         page.locator('.remove-report').click()
         page.get_by_role('button',name='Сохранить и обновить карточку').click()
+        expect(page.locator('#dossier-dialog')).not_to_be_visible()
         page.locator('#refresh-card').wait_for()
         page.locator('#report-files').set_input_files([
             {'name':'annual.txt','mimeType':'text/plain','buffer':'Годовой отчет за 2023 год'.encode()},
