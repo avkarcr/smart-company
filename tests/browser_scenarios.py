@@ -9,11 +9,12 @@ from http.server import ThreadingHTTPServer
 from smart_company.server import make_handler
 from smart_company.service import Research
 from smart_company.data import Store
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import sync_playwright, expect
 
 with TemporaryDirectory() as tmp:
     research=Research(Store(tmp))
     catalog=[dict(ticker='SBER',name='Сбербанк',full_name='Тестовый эмитент — синтетические данные',isin='TEST',board='TQBR',sector='finance')]
+    catalog.append(dict(ticker='LKOH',name='ЛУКОЙЛ',full_name='Тестовый эмитент',isin='TEST2',board='TQBR',sector='energy'))
     candles=[dict(begin=str(date.today()-timedelta(days=260-i)),open=100+i/5,close=100+i/5+math.sin(i/8),high=102+i/5,low=98+i/5,volume=1000+i) for i in range(260)]
     def bundle(data):return dict(data=data,error=None,cached=False,fetched_at='2026-10-05T12:00:00+03:00')
     research.provider.catalog=lambda *a,**kw:bundle(catalog)
@@ -44,14 +45,33 @@ with TemporaryDirectory() as tmp:
         page.locator('.remove-report').click()
         page.get_by_role('button',name='Сохранить и обновить карточку').click()
         page.locator('#refresh-card').wait_for()
+        page.locator('#report-files').set_input_files([
+            {'name':'annual.txt','mimeType':'text/plain','buffer':'Годовой отчет за 2023 год'.encode()},
+            {'name':'quarter.txt','mimeType':'text/plain','buffer':'Отчет за 1 квартал 2025 года'.encode()}])
+        expect(page.locator('#upload-status')).to_contain_text('Обработано: 2.')
+        expect(page.locator('.report-list article')).to_have_count(2)
+        expect(page.locator('.report-list')).to_contain_text('Годовой')
+        expect(page.locator('.report-list')).to_contain_text('Данные устарели')
+        page.locator('#search').fill('LKOH');page.locator('#search').press('Enter')
+        expect(page.locator('.card-head h2')).to_have_text('ЛУКОЙЛ')
+        expect(page.locator('.report-list article')).to_have_count(0)
+        page.locator('#search').fill('SBER');page.locator('#search').press('Enter')
+        expect(page.locator('.card-head h2')).to_have_text('Сбербанк')
+        expect(page.locator('.report-list article')).to_have_count(2)
+        page.reload();page.locator('#refresh-card').wait_for()
+        expect(page.locator('.report-list article')).to_have_count(2)
+        page.locator('#report-files').set_input_files([{'name':'again.txt','mimeType':'text/plain','buffer':'Годовой отчет за 2023 год'.encode()}])
+        expect(page.locator('#upload-status')).to_contain_text('Уже были загружены: 1.')
+        expect(page.locator('.report-list article')).to_have_count(2)
+        page.screenshot(path=str(out/'uploads-desktop.png'),full_page=True)
         response=page.request.get(f'http://127.0.0.1:{server.server_port}/api/company/SBER/pdf')
         assert response.status==200 and response.body().startswith(b'%PDF')
         page.set_viewport_size({'width':390,'height':844})
-        assert not page.evaluate('document.documentElement.scrollWidth > innerWidth')
         page.screenshot(path=str(out/'mobile.png'),full_page=True)
+        assert not page.evaluate('document.documentElement.scrollWidth > innerWidth')
         page.locator('#search').fill('ZZZZZZ')
         assert 'Ничего не найдено' in page.locator('#results').inner_text()
         assert not errors,errors
         browser.close()
     server.shutdown()
-    print('Browser acceptance passed: search, company, settings, dossier, PDF, mobile, empty search, no JS errors')
+    print('Browser acceptance passed: search, company, settings, dossier, PDF, mobile, empty search, no JS errors, multi-file upload, company isolation, reload persistence, stale warning, deduplication')
