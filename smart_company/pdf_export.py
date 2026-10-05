@@ -53,7 +53,13 @@ def export_pdf(s):
     heading('Технический анализ')
     text(f"Сигнал: {LABEL[tech['signal']]}; голоса: {tech['votes']}; покрытие: {tech['coverage']}%; порог: {s['settings']['threshold']}%")
     text(f"Режим: {s['settings']['mode']}; веса групп: {s['settings']['groups']}; веса индикаторов: {s['settings']['weights']}")
-    table([['Индикатор','Значение','Сигнал','Правило']]+[[r['name'],r['value'],LABEL[r['signal']],r['rule']] for r in tech['rows']],[115,65,80,255])
+    table([['Индикатор','Значение','Сигнал','Правило']]+[[r['name'],r['value'],('Выключен' if r.get('enabled') is False else LABEL[r['signal']])+f" ({r.get('effective_weight',0)}%)",r['rule']] for r in tech['rows']],[115,65,80,255])
+    text('Индивидуальная доля указана без вклада сочетаний. Похожие индикаторы делят бюджет семейства.')
+    heading('Подтверждающие сочетания')
+    text(f"Бюджет сочетаний: {tech.get('combination_pool',0)}%. Настройки действуют глобально.")
+    for combo in tech.get('combinations',[]):
+        status={'disabled':'отключено','missing':'недостаточно данных','unconfirmed':'нет согласия','confirmed':'согласованы'}[combo['status']]
+        text(f"{combo['name']}: {status}; {LABEL[combo['signal']]}; вклад {combo['contribution']:.2f}%.")
     heading('Фундаментальный анализ')
     for reason in f['reasons']: text(reason)
     text(str(f['metrics']))

@@ -30,6 +30,14 @@ with TemporaryDirectory() as tmp:
         page.goto(f'http://127.0.0.1:{server.server_port}')
         page.get_by_role('button',name='Сбербанк SBER',exact=True).wait_for()
         page.screenshot(path=str(out/'home.png'),full_page=True)
+        page.get_by_role('button',name='Индикаторы и веса',exact=True).click()
+        expect(page.locator('[data-enabled]')).to_have_count(21)
+        page.get_by_role('button',name='Применить рекомендуемый набор').click()
+        page.locator('[data-enabled="rsi"]').uncheck()
+        page.screenshot(path=str(out/'indicators-desktop.png'),full_page=True)
+        page.get_by_role('button',name='Сохранить для всех компаний').click()
+        assert research.settings()['enabled']['rsi'] is False
+
         page.locator('#search').fill('sber');page.locator('#search').press('Enter')
         page.locator('#refresh-card').wait_for()
         assert page.locator('.verdict h3').inner_text()=='Ждать'
@@ -54,6 +62,7 @@ with TemporaryDirectory() as tmp:
         expect(page.locator('.report-list')).to_contain_text('Данные устарели')
         page.locator('#search').fill('LKOH');page.locator('#search').press('Enter')
         expect(page.locator('.card-head h2')).to_have_text('ЛУКОЙЛ')
+        assert next(r for r in research.store.read('snapshot-LKOH')['technical']['rows'] if r['id']=='rsi')['enabled'] is False
         expect(page.locator('.report-list article')).to_have_count(0)
         page.locator('#search').fill('SBER');page.locator('#search').press('Enter')
         expect(page.locator('.card-head h2')).to_have_text('Сбербанк')
@@ -67,6 +76,11 @@ with TemporaryDirectory() as tmp:
         response=page.request.get(f'http://127.0.0.1:{server.server_port}/api/company/SBER/pdf')
         assert response.status==200 and response.body().startswith(b'%PDF')
         page.set_viewport_size({'width':390,'height':844})
+        page.get_by_role('button',name='Индикаторы и веса',exact=True).click()
+        expect(page.locator('[data-enabled="rsi"]')).not_to_be_checked()
+        page.screenshot(path=str(out/'indicators-mobile.png'),full_page=True)
+        assert page.locator('#indicators-dialog').evaluate('(el)=>el.scrollWidth <= el.clientWidth')
+        page.locator('[data-close="indicators-dialog"]').click()
         page.screenshot(path=str(out/'mobile.png'),full_page=True)
         assert not page.evaluate('document.documentElement.scrollWidth > innerWidth')
         page.locator('#search').fill('ZZZZZZ')

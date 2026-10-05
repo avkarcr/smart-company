@@ -10,6 +10,7 @@ from urllib.parse import urlsplit,parse_qs,quote
 from .service import Research
 from .data import SECTORS,validate_dossier
 from .analysis import settings_checked
+from .indicators import INDICATORS, COMBINATIONS, RECOMMENDED
 from .pdf_export import export_pdf
 from .reports import MAX_FILE
 
@@ -32,7 +33,7 @@ def make_handler(research):
             try:
                 url=urlsplit(self.path); path=url.path; q=parse_qs(url.query)
                 if path=='/api/bootstrap':
-                    return self.respond(dict(catalog=research.provider.catalog(),settings=research.settings(),sectors=SECTORS,csrf=token))
+                    return self.respond(dict(catalog=research.provider.catalog(),settings=research.settings(),sectors=SECTORS,csrf=token,indicators=INDICATORS,combinations=COMBINATIONS,recommended=RECOMMENDED))
                 report=re.fullmatch(r'/api/reports/([A-Z0-9_-]{1,24})(?:/([a-f0-9]{64}))?',path)
                 if report:
                     ticker,ident=report.groups()
