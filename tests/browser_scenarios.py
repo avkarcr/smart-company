@@ -67,8 +67,8 @@ with TemporaryDirectory() as tmp:
         response=page.request.get(f'http://127.0.0.1:{server.server_port}/api/company/SBER/pdf')
         assert response.status==200 and response.body().startswith(b'%PDF')
         page.set_viewport_size({'width':390,'height':844})
-        assert not page.evaluate('document.documentElement.scrollWidth > innerWidth')
         page.screenshot(path=str(out/'mobile.png'),full_page=True)
+        assert not page.evaluate('document.documentElement.scrollWidth > innerWidth')
         page.locator('#search').fill('ZZZZZZ')
         assert 'Ничего не найдено' in page.locator('#results').inner_text()
         assert not errors,errors
