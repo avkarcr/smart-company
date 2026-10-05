@@ -8,7 +8,12 @@ from .data import Provider, Store, SECTORS, default_dossier, now
 class Research:
     def __init__(self,store=None):
         self.store=store or Store(); self.provider=Provider(self.store); self.reports=Reports(self.store)
-    def settings(self): return settings_checked(self.store.read('settings',DEFAULT_SETTINGS))
+    def settings(self):
+        saved=self.store.read('settings')
+        if saved is not None and 'enabled' not in saved:
+            # Preserve the prior user's explicit weights and do not activate new combinations silently.
+            saved={**saved,'combinations_enabled':False}
+        return settings_checked(saved if saved is not None else DEFAULT_SETTINGS)
     def company(self,ticker,refresh=False):
         catalog=self.provider.catalog()
         company=next((c for c in catalog['data'] if c['ticker']==ticker),None)

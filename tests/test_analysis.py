@@ -24,7 +24,7 @@ class AnalysisTests(unittest.TestCase):
         r=aggregate(rows,DEFAULT_SETTINGS);self.assertEqual(r['votes']['buy'],70);self.assertEqual(r['signal'],'wait')
     def test_group_normalization(self):
         rows=[dict(id=str(i),group='trend',signal='buy') for i in range(10)]+[dict(id='rsi',group='momentum',signal='sell')]
-        self.assertEqual(aggregate(rows,DEFAULT_SETTINGS)['votes']['buy'],50)
+        self.assertEqual(aggregate(rows,{**DEFAULT_SETTINGS,'groups':{'trend':1,'momentum':1}})['votes']['buy'],50)
         s={**DEFAULT_SETTINGS,'mode':'count'};self.assertEqual(aggregate(rows,s)['signal'],'buy')
     def test_disabled_all(self):
         s={**DEFAULT_SETTINGS,'groups':dict(trend=0)};r=aggregate([dict(id='a',group='trend',signal='buy')],s);self.assertEqual(r['signal'],'wait');self.assertEqual(r['coverage'],0)

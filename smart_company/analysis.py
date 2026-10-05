@@ -1,14 +1,22 @@
 """Deterministic, inspectable rules; scores are NOT probabilities."""
 import math
+from copy import deepcopy
+from .indicators import RECOMMENDED, FAMILIES, COMBINATIONS, INDICATORS
 from datetime import date
 import numpy as np
 import pandas as pd
 
 GROUPS = {"trend": "Тренд", "momentum": "Импульс", "volume": "Объем", "volatility": "Волатильность"}
-DEFAULT_SETTINGS = {"threshold": 80, "min_coverage": 80, "mode": "weighted", "weights": {}, "groups": {g: 1 for g in GROUPS}}
+DEFAULT_SETTINGS = deepcopy(RECOMMENDED)
 
 def settings_checked(data):
-    result = {**DEFAULT_SETTINGS, **data}
+    if not isinstance(data,dict): raise ValueError('Настройки должны быть объектом')
+    result = {**deepcopy(DEFAULT_SETTINGS), **data}
+    for key in ('enabled','combination_rules'):
+        if not isinstance(result[key],dict) or any(type(v) is not bool for v in result[key].values()):
+            raise ValueError('Переключатели должны быть true/false')
+        result[key]={**DEFAULT_SETTINGS[key],**result[key]}
+    if type(result['combinations_enabled']) is not bool: raise ValueError('Неверный переключатель сочетаний')
     for key in ("threshold", "min_coverage"):
         v = float(result[key])
         if not math.isfinite(v) or not 51 <= v <= 100:
@@ -37,24 +45,52 @@ def wilder(s, n=14):
     return out
 
 def aggregate(rows, settings):
-    configured = [r for r in rows if settings["weights"].get(r["id"], 1) > 0 and settings["groups"].get(r["group"], 1) > 0]
-    valid = [r for r in configured if r["signal"] is not None]
-    coverage = 100*len(valid)/len(configured) if configured else 0
-    votes = {"buy": 0., "sell": 0., "wait": 0.}
+    def active(r):
+        return settings.get('enabled',{}).get(r['id'],True) and settings['weights'].get(r['id'],1)>0 and settings['groups'].get(r['group'],1)>0
+    configured=[r for r in rows if active(r)]
+    valid=[r for r in configured if r['signal'] is not None]
+    coverage=100*len(valid)/len(configured) if configured else 0
+    effective={}
     for group in GROUPS:
-        members = [r for r in valid if r["group"] == group]
-        total = sum(settings["weights"].get(r["id"], 1) for r in members)
-        for r in members:
-            weight = 1 if settings["mode"] == "count" else settings["groups"].get(group, 1)*settings["weights"].get(r["id"], 1)/total
-            votes[r["signal"]] += weight
-    total = sum(votes.values())
-    votes = {k: round(100*v/total, 2) if total else 0 for k,v in votes.items()}
-    signal = "wait"
-    if coverage >= settings["min_coverage"]:
-        for side in ("buy", "sell"):
-            if votes[side] >= settings["threshold"]:
-                signal = side
-    return {"signal": signal, "votes": votes, "coverage": round(coverage,1), "available": len(valid), "configured": len(configured), "threshold": settings["threshold"]}
+        members=[r for r in valid if r['group']==group]
+        if settings['mode']=='count':
+            effective.update({r['id']:1. for r in members});continue
+        families={}
+        for r in members: families.setdefault(FAMILIES.get(r['id'],r['id']),[]).append(r)
+        budgets={k:max(settings['weights'].get(r['id'],1) for r in rs) for k,rs in families.items()}
+        budget=sum(budgets.values())
+        for family,rs in families.items():
+            weight_sum=sum(settings['weights'].get(r['id'],1) for r in rs)
+            for r in rs:
+                effective[r['id']]=settings['groups'].get(group,1)*budgets[family]/budget*settings['weights'].get(r['id'],1)/weight_sum
+    total=sum(effective.values())
+    effective={k:v/total for k,v in effective.items()} if total else {}
+    base={side:sum(effective[r['id']] for r in valid if r['signal']==side)*100 for side in ('buy','sell','wait')}
+    lookup={r['id']:r for r in rows}; combinations=[]
+    for rule in COMBINATIONS:
+        status='disabled'; side='wait'
+        selected=[lookup.get(i) for i in rule['members']]
+        if settings.get('combinations_enabled',False) and settings['mode']=='weighted' and settings.get('combination_rules',{}).get(rule['id'],True):
+            if any(r is None or not active(r) for r in selected): status='disabled'
+            elif any(r['signal'] is None for r in selected):status='missing'
+            elif len({r['signal'] for r in selected})==1 and selected[0]['signal'] in ('buy','sell'):
+                status='confirmed';side=selected[0]['signal']
+            else:status='unconfirmed'
+        combinations.append({**rule,'status':status,'signal':side,'contribution':0})
+    eligible=[c for c in combinations if c['status']!='disabled']
+    pool=10 if eligible and total else 0
+    votes={side:value*(1-pool/100) for side,value in base.items()}
+    for c in eligible:
+        c['contribution']=pool/len(eligible)
+        votes[c['signal']]+=c['contribution']
+    signal='wait'
+    if coverage>=settings['min_coverage']:
+        for side in ('buy','sell'):
+            if votes[side]>=settings['threshold']:signal=side
+    for r in rows:
+        r['enabled']=active(r)
+        r['effective_weight']=round(effective.get(r['id'],0)*(100-pool),2)
+    return dict(signal=signal,votes={k:round(v,2) for k,v in votes.items()},base_votes={k:round(v,2) for k,v in base.items()},coverage=round(coverage,1),available=len(valid),configured=len(configured),threshold=settings['threshold'],combinations=combinations,combination_pool=pool)
 
 def technical(candles, settings):
     df = pd.DataFrame(candles)
