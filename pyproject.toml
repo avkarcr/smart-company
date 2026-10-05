@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "smart-company"
+version = "0.1.0"
+description = "Local MOEX company research dashboard"
+requires-python = ">=3.11"
+dependencies = ["numpy>=1.24,<3", "pandas>=2.0,<3", "reportlab>=4,<5"]
+
+[project.scripts]
+smart-company = "smart_company.server:main"
+
+[tool.setuptools.package-data]
+smart_company = ["static/*"]
